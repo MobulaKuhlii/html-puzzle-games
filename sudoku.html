@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <title>Sudoku</title>
+    <script>
+        const size = 9;
+
+        const peers = Array.from({length: size},
+            (_, rowIndex) => Array.from({length: size},
+                (_, colIndex) => {
+                    const cellPeers = new Set();
+
+                    for(let i = 0; i < size; i++) {
+                        cellPeers.add(`${rowIndex} ${i}`).add(`${i} ${colIndex}`);
+                    }
+
+                    const sqRowStart = Math.floor(rowIndex / 3) * 3;
+                    const sqRowEnd = sqRowStart + 3;
+                    const sqColStart = Math.floor(colIndex / 3) * 3;
+                    const sqColEnd = sqColStart + 3;
+
+                    for(let i = sqRowStart; i < sqRowEnd; i++) {
+                        for(let j = sqColStart; j < sqColEnd; j++) {
+                            cellPeers.add(`${i} ${j}`);
+                        }
+                    }
+
+                    cellPeers.delete(`${rowIndex} ${colIndex}`);
+                    return Array.from(cellPeers, str => str.split(" ").map(elem => parseInt(elem)));
+                }));
+                  
+        let difficulty;
+        const modifiers = new Map([["Very Easy", 64], ["Easy", 49], ["Medium", 36], ["Hard", 25], ["Very Hard", 20]]);
+
+        function init() {
+            const selector = document.getElementById("difficulty");
+            modifiers.forEach((_, key) => {
+                const option = document.createElement("option");
+                option.value = key;
+                option.textContent = key;
+                if(key == "Medium") {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
+            });
+            selector.onchange = event => {
+                difficulty = event.target.value;
+                console.log(`Changing difficulty to ${difficulty}.`);
+            }
+
+            difficulty = "Medium";
+            draw();
+        }
+
+        function draw() {
+            const container = document.getElementById("container");
+            container.style.background = "white";
+
+            let unfolded = false;
+
+            for(let rowIndex = 0; rowIndex < size; rowIndex++) {
+                const row = document.createElement("div");
+                row.classList.add("row");
+
+                for(let colIndex = 0; colIndex < size; colIndex++) {
+                    const selector = document.createElement("div");
+                    selector.id = `${rowIndex} ${colIndex}`;
+                    selector.classList.add("selector");
+
+                    const subSquareRight = colIndex + 1 < size && colIndex % 3 == 2;
+                    const subSquareBottom = rowIndex + 1 < size && rowIndex % 3 == 2;
+
+                    for(let value = 0; value <= size; value++) {
+                        const option = document.createElement("p");
+                        option.hidden = value > 0;
+                        option.selected = value < 1;
+                        option.innerHTML = `<span>${value > 0 ? value : "-"}</span>`;
+
+                        const overflowRight = rowIndex + value >= size;
+                        const overflowBottom = value == size;
+
+                        if(overflowRight) {
+                            option.classList.toggle("selector-overflow-right");
+                        }
+                        if(overflowBottom) {
+                            option.classList.toggle("selector-overflow-bottom");
+                        }
+                        if(value < 1 && subSquareRight) {
+                            option.classList.toggle("sub-square-right");
+                        }
+                        if(value < 1 && subSquareBottom) {
+                            option.classList.toggle("sub-square-bottom");
+                        }
+
+                        option.onclick = () => {
+                            container.style.background = "white";
+
+                            if(option.selected) {
+                                if(unfolded) {
+                                    return;
+                                }
+
+                                selector.childNodes.forEach(node => {
+                                    node.hidden = false;
+                                    node.classList.toggle("on-top");
+                                });
+
+                                option.selected = false;
+
+                                if(overflowRight) {
+                                    option.classList.toggle("selector-overflow-right");
+                                }
+                                if(overflowBottom) {
+                                    option.classList.toggle("selector-overflow-bottom");
+                                }
+                                if(subSquareRight) {
+                                    option.classList.toggle("sub-square-right");
+                                }
+                                if(subSquareBottom) {
+                                    option.classList.toggle("sub-square-bottom");
+                                }
+                                
+                                unfolded = true;
+                            }
+                            else {
+                                selector.childNodes.forEach(node => {
+                                    node.hidden = true;
+                                    node.classList.toggle("on-top");
+                                });
+
+                                option.hidden = false;
+                                option.selected = true;
+
+                                if(overflowRight) {
+                                    option.classList.toggle("selector-overflow-right");
+                                }
+                                if(overflowBottom) {
+                                    option.classList.toggle("selector-overflow-bottom");
+                                }
+                                if(subSquareRight) {
+                                    option.classList.toggle("sub-square-right");
+                                }
+                                if(subSquareBottom) {
+                                    option.classList.toggle("sub-square-bottom");
+                                }
+
+                                unfolded = false;
+                            }
+                        }
+                        selector.appendChild(option);
+                    }
+                    row.appendChild(selector);
+                }
+                container.appendChild(row);
+            }
+        }
+
+        function fill(board, generated = false) {
+            let clueCount, visible;
+            if(generated) {
+                clueCount = modifiers.get(difficulty);
+                visible = shuffle(Array.from({length: size * size}, (_, i) => i)).slice(0, clueCount);
+            }
+
+            board.forEach((row, rowIndex) => {
+                row.forEach((value, colIndex) => {
+                    if(generated && !visible.includes(rowIndex * size + colIndex)) {
+                        return;
+                    }
+                    const selector = document.getElementById(`${rowIndex} ${colIndex}`);
+                    const options = Array.from(selector.childNodes);
+                    options.find(option => option.selected).click();
+                    options.find(option => option.textContent == value).click();
+                });
+            });
+        }
+
+        function reset() {
+            const container = document.getElementById("container");
+            container.innerHTML = "";
+            draw();
+        }
+
+        function parse() {
+            const file = document.getElementById("file-select").files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                const text = reader.result;
+                const board = text.trim().split("\n").map(row => row.split(" "));
+                fill(board);
+            }
+            reader.readAsText(file);
+        }
+
+        function save() {
+            const text = Array.from({length: size}, (_, rowIndex) =>
+                Array.from({length: size}, (_, colIndex) => {
+                    const selector = document.getElementById(`${rowIndex} ${colIndex}`);
+                    const options = Array.from(selector.childNodes);
+                    return options.find(option => option.selected).textContent;
+                }).join(" ")
+            ).join("\n");
+
+            const blob = new Blob([text]);
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "sudoku-puzzle";
+            document.body.appendChild(a);
+            a.click();
+            // cleanup
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blob);
+        }
+
+        function shuffle(arr) {
+            arr = arr.slice();
+
+            for(let i = arr.length - 1, j, temp; i > 0; i--) {
+                j = Math.round(Math.random() * i);
+                temp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = temp;
+            }
+
+            return arr;
+        }
+
+        function check(highlight = false) {
+            const container = document.getElementById("container");
+            const board = Array.from(container.childNodes,
+                row => Array.from(row.childNodes,
+                    selector => Array.from(selector.childNodes).find(option => option.selected).textContent));
+
+            const values = "123456789";
+            const isValidRow = row => row.slice().sort().join("") == values;
+
+            const chunk = (arr, size) => Array.from({length: Math.ceil(arr.length / size)},
+                (_, k) => arr.slice(k * size, (k + 1) * size));
+            const transpose = arr => arr[0].map((_, i) => arr.map(row => row[i]));
+
+            const isValid = board.every(isValidRow) && transpose(board).every(isValidRow) &&
+                            chunk(board, 3).every(boardChunk => transpose(boardChunk.map(row => chunk(row, 3)))
+                                           .every(square => isValidRow(square.flat())));
+            
+            if(highlight) {
+                container.style.background = isValid ? "green" : "red";
+            }
+
+            return isValid;
+        }
+
+        function assign(board, rowIndex, colIndex, value) {
+            if(peers[rowIndex][colIndex].some(([i, j]) => board[i][j] == value)) {
+                return false;
+            }
+            board[rowIndex][colIndex] = value;
+            return peers[rowIndex][colIndex].every(([i, j]) => {
+                if(board[i][j].includes(value)) {
+                    board[i][j] = board[i][j].replace(value, "");
+                    if(board[i][j].length == 1) {
+                        return assign(board, i, j, board[i][j]);
+                    }
+                }
+                return true;
+            });
+        }
+
+        function search(board) {
+            const open = board.flatMap((row, i) => row.map((values, j) => [values, i, j]))
+                              .filter(elem => elem[0].length > 1);
+            if(open.length < 1) {
+                return board;
+            }
+            const copy = JSON.stringify(board);
+            const [values, rowIndex, colIndex] = open.sort((a, b) => a[0].length - b[0].length)[0];
+            for(const value of values) {
+                if(assign(board, rowIndex, colIndex, value)) {
+                    const solution = search(board);
+                    if(solution) {
+                        return solution;
+                    }
+                }
+                board = JSON.parse(copy);
+            }
+            return false;
+        }
+
+        function generate() {
+            reset();
+
+            const values = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            let board = Array.from({length: size}, () => Array.from({length: size}, () => shuffle(values).join("")));
+
+            board = search(board);
+            if(!board) {
+                alert("Board generation failed.");
+                return;
+            }
+
+            console.log("Board generation succeeded.");
+            fill(board, true);
+        }
+
+        function solve() {
+            const values = "123456789";
+            let board = Array.from({length: size}, () => Array(size).fill(values));
+
+            board.every((row, rowIndex) =>
+                row.every((_, colIndex) => {
+                    const selector = document.getElementById(`${rowIndex} ${colIndex}`);
+                    const options = Array.from(selector.childNodes);
+                    const value = options.find(option => option.selected).textContent;
+                    if(value != "-") {
+                        if(!assign(board, rowIndex, colIndex, value)) {
+                            alert("Cannot process provided board.");
+                            return false;
+                        }
+                    }
+                    return true;
+                }));
+
+            board = search(board);
+            if(!board) {
+                alert("No solution found for provided board.");
+                return;
+            }
+
+            console.log("Solution found.");
+            fill(board);
+        }
+    </script>
+    <style>
+        body {
+            margin: 0px;
+            padding: 0px;
+        }
+        #sudoku-puzzle {
+            margin-top: 10px;
+            margin-left: 10px;
+            width: 271px;
+        }
+        #container {
+            margin-bottom: 10px;
+            width: 270px;
+            height: 270px;
+            display: flex;
+            flex-flow: column nowrap;
+            border-bottom: 1px solid;
+            border-right: 1px solid;
+            font-family: "DejaVu Serif";
+            font-size: 23px;
+        }
+        button {
+            padding: 0px;
+            padding-top: 1.5px;
+            padding-bottom: 1.5px;
+            font-family: "DejaVu Serif";
+            font-size: 15px;
+        }
+        #parse-row {
+            display: flex;
+            flex-flow: column nowrap;
+        }
+        #parse {
+            margin-bottom: 15px;
+            width: 271px;
+        }
+        #file-select {
+            margin-bottom: 5px;
+        }
+        #smaller-buttons {
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: stretch;
+        }
+        #smaller-buttons button {
+            flex: 1;
+        }
+        #difficulty-row {
+            margin-bottom: 30px;
+            display: flex;
+            flex-flow: column nowrap;
+            align-items: center;
+        }
+        #generate {
+            margin-bottom: 5px;
+            width: 271px;
+        }
+        #difficulty-row div {
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: stretch;
+            width: 271px;
+        }
+        #difficulty-row div a {
+            font-family: "DejaVu Serif";
+            font-size: 15px;
+            flex: 1;
+        }
+        #difficulty {
+            border: none;
+            background: white;
+            font-family: "DejaVu Serif";
+            font-size: 15px;
+            flex: 1;
+        }
+        .row {
+            display: flex;
+            align-content: center;
+            width: 270px;
+            height: 30px;
+        }
+        .selector {
+            width: 30px;
+            height: 30px;
+        }
+        .selector p {
+            margin: 0px;
+            padding: 0px;
+            border-top: 1px solid;
+            border-left: 1px solid;
+            height: 29px;
+            width: 29px;
+            text-align: center;
+        }
+        .selector p:hover {
+            cursor: pointer;
+        }
+        .selector-overflow-right {
+            border-right: 1px solid;
+        }
+        .selector-overflow-bottom {
+            border-bottom: 1px solid;
+        }
+        .sub-square-right {
+            border-right: 2px solid;
+        }
+        .sub-square-bottom {
+            border-bottom: 2px solid;
+        }
+        .on-top {
+            position: relative;
+            z-index: 100;
+            background: gray;
+        }
+        .on-top:hover {
+            background: darkblue;
+        }
+        .on-top:hover span {
+            color: white;
+        }
+    </style>
+</head>
+<body onload="init();">
+    <div id="sudoku-puzzle">
+        <div id="container"></div>
+        <div id="controls">
+            <div id="parse-row">
+                <input type="file" id="file-select" accept=".txt"/>
+                <button id="parse" onclick="parse();">Parse</button>
+            </div>
+            <div id="difficulty-row">
+                <button id="generate" onclick="generate();">Generate</button>
+                <div>
+                    <a>Difficulty: </a>
+                    <select id="difficulty"></select>
+                </div>
+            </div>
+            <div id="smaller-buttons">
+                <button id="save" onclick="save();">Save</button>
+                <button id="check" onclick="check(true);">Check</button>
+                <button id="solve" onclick="solve()">Solve</button>
+                <button id="reset" onclick="reset();">Reset</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
